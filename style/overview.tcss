@@ -1,0 +1,41 @@
+/* Screen {
+    padding-right: 2;
+} */
+
+#inputer {
+    height: 10%;
+    padding: 0;
+}
+
+#tools{
+    margin-top: 1;
+    height: 10%;
+}
+
+#tools > Button {
+    margin-right: 2;
+}
+
+#response {
+    height: 25%;
+}
+
+#response > * {
+    width: 50%;
+}
+
+#request {
+    margin-top: 1;
+    height: 50%;
+}
+
+Input {
+    height: 1;
+    border: none;
+}
+
+Button {
+    background: #007bff;
+    /* height: 3; */
+    width: 5;
+}
