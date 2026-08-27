@@ -1,7 +1,3 @@
-/* Screen {
-    padding-right: 2;
-} */
-
 #inputer {
     height: 10%;
     padding: 0;
@@ -16,25 +12,13 @@
     margin-right: 2;
 }
 
-#response {
-    height: 25%;
-}
-
-#response > * {
-    width: 50%;
+#logs {
+    height: 40%;
 }
 
 #req_viewer {
     margin-top: 1;
     height: 50%;
-}
-
-#request {
-    width: 65%;
-}
-
-#logs {
-    width: 35%;
 }
 
 Input {

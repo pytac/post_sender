@@ -16,6 +16,14 @@ def process_str(string: str):
     string = "\\".join(string.split("/"))
     return string
 
+def send_requests(url, headers, payload, mode: bool = True):
+    if (mode):
+        res = requests.post(url, headers=headers, json=payload)
+    else:
+        res = requests.post(url, headers=headers, data=payload)
+
+    return res
+
 class SendPost(App):
     """最简单的 Textual 应用"""
 
@@ -31,12 +39,12 @@ class SendPost(App):
                 ),
                 Horizontal(
                     Label("Headers File(json): "),
-                    Input(placeholder="Headers File", id="headers-file"),
+                    Input(placeholder="Headers File", id="headers"),
                     id="headers-container",
                 ),
                 Horizontal(
                     Label("Payload File(json): "),
-                    Input(placeholder="Payload File", id="payload-file"),
+                    Input(placeholder="Payload File", id="payload"),
                     id="payload-container",
                 ),
                 id="inputer",
@@ -44,189 +52,151 @@ class SendPost(App):
 
         # Tools
         yield Horizontal(
-                Button("Update Headers",id="upd-headers"),
-                Button("Update Payload",id="upd-payload"),
-                Button("Send",id="send"),
-                Checkbox("Send JSON",id="payload-mode",value=True),
-                id="tools",
-            )
-        
-        # Sending Viewer
-        yield Horizontal(
-                Vertical(
-                    Static(" Headers Viewer",id="tip-headers"),
-                    TextArea(
-                        id="headers",
-                        language="json",
-                        read_only=True,
-                    ),
-                ),
-                Vertical(
-                    Static(" Payload Viewer",id="tip-payload"),
-                    TextArea(
-                        id="payload",
-                        language="json",
-                        read_only=True,
-                    ),
-                ),
-                id="response"
-            )
+            Button("Send",id="send"),
+            Checkbox("Send JSON",id="payload-mode",value=True),
+            id="tools",
+        )
+
+        yield Vertical(
+            Static("Log"),
+            Log(id="log"),
+            id="logs"
+        )
 
         # Request Viewer
-        yield Horizontal(
-            Vertical(
-                Static(" Response Viewer (Payload Mode: JSON)",id="tip-response"),
-                TextArea(
-                    id="ret",
-                    language="json",
-                    read_only=True,
-                ),
-                id="requests",
+        yield Vertical(
+            Static(" Response Viewer (Payload Mode: JSON)",id="tip-response"),
+            TextArea(
+                id="ret",
+                language="json",
+                read_only=True,
             ),
-            Vertical(
-                Static("Log"),
-                Log(id="log"),
-                id="logs"
-            ),
-            id="req_viewer"
+            id="requests",
         )
+        
         yield Footer()
 
     def on_mount(self):
         self.headers_file = None
         self.payload_file = None
 
-    # @on(Button.Pressed, "#send")
-    # def on_send_pressed(self):
-    #     self.query_one("#response").text = "Sending...\nabc"
-
     @on(Checkbox.Changed, "#payload-mode")
     def payload_mode_changed(self):
         mode = self.query_one("#payload-mode").value
         self.query_one("#tip-response").update(" Response Viewer (Payload Mode: "+("JSON" if mode else "String")+")")
         
-    @on(Button.Pressed, "#upd-headers")
-    def upd_headers(self):
-        self.headers_file = self.query_one("#headers-file").value
-        self.headers_file = process_str(self.headers_file)
-
-        if not self.headers_file:
-            self.headers_file = None
-            self.notify("Please Input Headers File Path First",
-                severity="warning",
-                timeout=3
-            )
-            return
-
-        if not exists(self.headers_file):
-            self.headers_file = None
-            self.notify("Headers File Is Not Exist",
-                severity="error",
-                timeout=5
-            )
-            return
-
-        tip = self.query_one("#tip-headers")
-        show_pth = "\\".join(self.headers_file.split('\\')[-2:])
-        tip.update(f" Headers: ...\\{show_pth}")
-        tip.styles.background = "#00FF00"
-        tip.styles.color = "#000000"
-
-        with open(self.headers_file, "r", encoding="utf-8") as f:
-            self.query_one("#headers").text = f.read()
-
-    
-    @on(Button.Pressed, "#upd-payload")
-    def upd_payload(self):
-        self.payload_file = self.query_one("#payload-file").value
-        self.payload_file = process_str(self.payload_file)
-
-        if not self.payload_file:
-            self.payload_file = None
-            self.notify("Please Input Payload File Path First",
-                severity="warning",
-                timeout=3
-            )
-            return
-
-        if not exists(self.payload_file):
-            self.payload_file = None
-            self.notify("Payload File Is Not Exist",
-                severity="error",
-                timeout=5
-            )
-            return
-
-        tip = self.query_one("#tip-payload")
-        show_pth = "\\".join(self.payload_file.split('\\')[-2:])
-        tip.update(f" Payload: ...\\{show_pth}")
-        tip.styles.background = "#00FF00"
-        tip.styles.color = "#000000"
-
-        with open(self.payload_file, "r", encoding="utf-8") as f:
-            self.query_one("#payload").text = f.read()
-
     @on(Button.Pressed,"#send")
     def send(self):
+        # load url
         url = self.query_one("#url").value.strip()
         if (not url):
             self.notify("Please Type URL",severity="error")
             return
 
-        headers = self.query_one("#headers").text
-        if (not headers):
-            headers = "{}"
-        headers = json.loads(headers)
+        # load headers
+        headers_file = self.query_one("#headers").value
+        headers_file = process_str(headers_file)
+        headers = None
+        if (not headers_file):
+            headers = {}
+        else:
+            try:
+                f = open(headers_file, "r")
+                headers = json.load(f)
+                f.close()
+            except FileNotFoundError as e:
+                self.notify(f"Headers File is not Exist", title="Headers File Analysis Error", severity="error", timeout=2)
+                return
+            except json.JSONDecodeError as e:
+                self.notify(f"Error: {e}", title="Headers File Analysis Error", severity="error", timeout=10)
+                return
 
-        payload = self.query_one("#payload").text
-        if (not payload):
-            self.notify("Please Upload Payload File",severity="error")
-            return
+        # load payload
+        payload_file = self.query_one("#payload").value
+        payload_file = process_str(payload_file)
         mode = self.query_one("#payload-mode").value
-        if (mode):
-            payload = json.loads(payload)
+        payload = None
+        if (not payload_file):
+            payload = None
+        else:
+            if (mode):
+                try:
+                    f = open(payload_file, "r")
+                    payload = json.load(f)
+                    f.close()
+                except FileNotFoundError as e:
+                    self.notify(f"Payload File is not Exist", title="Payload File Analysis Error", severity="error", timeout=2)
+                    return
+                except json.JSONDecodeError as e:
+                    self.notify(f"Error: {e}", title="Payload File Analysis Error", severity="error", timeout=10)
+                    return
+            else:
+                try:
+                    f = open(payload_file, "r")
+                    payload = f.read()
+                    f.close()
+                except FileNotFoundError as e:
+                    self.notify(f"Payload File is not Exist", title="Payload File Analysis Error", severity="error", timeout=2)
+                    return
 
         log = self.query_one("#log")
+        log.write_line("---")
         log.write_line("["+time.strftime("%H:%M:%S", time.localtime())+"] Making Response...")
         log.write_line(f"URL: {url}, Payload_Mode: {'JSON' if mode else 'String'}")
         log.write_line(f"Headers: {self.headers_file}, Payload: {self.payload_file}")
 
-        res = None
         if (not url.startswith("http")):
-            log.write_line("Try httpS")
-            send_url = "https://" + url
-            try:
-                res = requests.post(send_url, headers=headers, json=payload)
-                log.write_line(f"Status: {res.status_code}")
-            except Exception as e:
-                log.write_line(f"Error: {e}, Status: {res.status_code}")
-                log.write_line(f"Try http")
-                try:
-                    res = requests.post(send_url, headers=headers, json=payload)
-                    log.write_line(f"Status: {res.status_code}")
-                except Exception as e:
-                    log.write_line(f"Error: {e}, Status: {res.status_code}")
-                    log.write_line(f"Task failed")
-                    res = False
+            url = "https://" + url
+
+        if (url.startswith("http://")):
+            log.write_line(f"Protocols: http")
         else:
+            log.write_line(f"Protocols: httpS")
+
+        res = None
+        try:
+            # 第一次尝试
+            res = send_requests(url, headers, payload, mode)
+            log.write_line(f"Status: {res.status_code}")
+        except requests.exceptions.SSLError as e:
+            # 证书错误（切换协议）
+            log.write_line("SSL Error, Switching Protocols...")
+            if (url.startswith("http://")):
+                url = url.replace("http://", "https://")
+                log.write_line(f"Protocols: httpS")
+            else:
+                url = url.replace("https://", "http://")
+                log.write_line(f"Protocols: http")
+            log.write_line(f"URL: {url}")
+            # 第二次尝试
             try:
-                res = requests.post(url, headers=headers, json=payload)
+                res = send_requests(url, headers, payload, mode)
                 log.write_line(f"Status: {res.status_code}")
             except Exception as e:
-                log.write_line(f"Error: {e}, Status: {res.status_code}")
+                log.write_line(f"Error: {e}")
                 log.write_line(f"Task failed")
                 res = False
+        except Exception as e:
+            log.write_line(f"Error: {e}")
+            log.write_line(f"Task failed")
+            res = False
 
-        if (not res or (res.status_code//100) != 2):
+        if (res == False):
             self.query_one("#tip-response").styles.background = "#FF0000"
             self.query_one("#tip-response").styles.color = "#FFFFFF"
-        else:
-            self.query_one("#tip-response").update(f" Response (Payload: {'JSON' if mode else 'String'}, Res: {res.headers['Content-Type']})")
-            self.query_one("#tip-response").styles.background = "#00FF00"
-            self.query_one("#tip-response").styles.color = "#000000"
+            self.query_one("#ret").text = ""
+        elif (res.status_code//100) != 2:
+            self.query_one("#tip-response").styles.background = "#FF0000"
+            self.query_one("#tip-response").styles.color = "#FFFFFF"
+            self.query_one("#tip-response").update(f" Response (Payload: {'JSON' if mode else 'String'}, Status: {res.status_code}, Res: {res.headers['Content-Type']})")
             res.encoding = "utf-8"
             self.query_one("#ret").text = res.text
-
+        else:
+            self.query_one("#tip-response").styles.background = "#00FF00"
+            self.query_one("#tip-response").styles.color = "#000000"
+            self.query_one("#tip-response").update(f" Response (Payload: {'JSON' if mode else 'String'}, Status: {res.status_code}, Res: {res.headers['Content-Type']})")
+            res.encoding = "utf-8"
+            self.query_one("#ret").text = res.text
 
 if __name__ == "__main__":
     SendPost().run()
