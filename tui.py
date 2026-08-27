@@ -189,13 +189,19 @@ class SendPost(App):
             self.query_one("#tip-response").styles.background = "#FF0000"
             self.query_one("#tip-response").styles.color = "#FFFFFF"
             self.query_one("#tip-response").update(f" Response (Payload: {'JSON' if mode else 'String'}, Status: {res.status_code}, Res: {res.headers['Content-Type']})")
-            res.encoding = "utf-8"
+            if ("charset=" in res.headers['Content-Type']):
+                res.encoding = res.headers['Content-Type'].split("charset=")[-1]
+            else:
+                res.encoding = "utf-8"
             self.query_one("#ret").text = res.text
         else:
             self.query_one("#tip-response").styles.background = "#00FF00"
             self.query_one("#tip-response").styles.color = "#000000"
             self.query_one("#tip-response").update(f" Response (Payload: {'JSON' if mode else 'String'}, Status: {res.status_code}, Res: {res.headers['Content-Type']})")
-            res.encoding = "utf-8"
+            if ("charset=" in res.headers['Content-Type']):
+                res.encoding = res.headers['Content-Type'].split("charset=")[-1]
+            else:
+                res.encoding = "utf-8"
             self.query_one("#ret").text = res.text
 
 if __name__ == "__main__":
