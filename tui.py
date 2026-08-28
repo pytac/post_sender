@@ -6,6 +6,7 @@ from os.path import exists
 import time
 import requests
 import json
+import threading
 
 def process_str(string: str):
     string = string.strip()
@@ -23,6 +24,9 @@ def send_requests(url, headers, payload, mode: bool = True):
         res = requests.post(url, headers=headers, data=payload)
 
     return res
+
+def time_stamp_log(string):
+    return "["+ time.strftime("%H:%M:%S", time.localtime()) +"] " + string
 
 class SendPost(App):
     """最简单的 Textual 应用"""
@@ -81,7 +85,7 @@ class SendPost(App):
         self.payload_file = None
 
     BINDINGS = [
-        ("^s","send","Send"),
+        ("ctrl+s","send","Send"),
     ]
 
     @on(Checkbox.Changed, "#payload-mode")
@@ -144,73 +148,83 @@ class SendPost(App):
                         self.notify(f"Payload File is not Exist", title="Payload File Analysis Error", severity="error", timeout=2)
                         return
 
+            self.notify("load file successfully & sending",severity="information",timeout=3)
             log = self.query_one("#log")
             log.write_line("---")
-            log.write_line("["+time.strftime("%H:%M:%S", time.localtime())+"] Making Response...")
+            # log.write_line("["+time.strftime("%H:%M:%S", time.localtime())+"] Making Response...")
+            log.write_line(time_stamp_log("Making Response..."))
             log.write_line(f"URL: {url}, Payload_Mode: {'JSON' if mode else 'String'}")
             log.write_line(f"Headers: {self.headers_file}, Payload: {self.payload_file}")
             log.refresh()
 
-            if (not url.startswith("http")):
-                url = "https://" + url
+            def send_core(self,url,headers,payload,mode):
+                if (not url.startswith("http")):
+                    url = "https://" + url
 
-            if (url.startswith("http://")):
-                log.write_line(f"Protocols: http")
-            else:
-                log.write_line(f"Protocols: httpS")
-
-            res = None
-            try:
-                # 第一次尝试
-                res = send_requests(url, headers, payload, mode)
-                log.write_line(f"Status: {res.status_code}")
-            except requests.exceptions.SSLError as e:
-                # 证书错误（切换协议）
-                log.write_line("SSL Error, Switching Protocols...")
                 if (url.startswith("http://")):
-                    url = url.replace("http://", "https://")
-                    log.write_line(f"Protocols: httpS")
-                else:
-                    url = url.replace("https://", "http://")
                     log.write_line(f"Protocols: http")
-                log.write_line(f"URL: {url}")
-                log.refresh()
-                # 第二次尝试
+                else:
+                    log.write_line(f"Protocols: httpS")
+
+                res = None
                 try:
+                    # 第一次尝试
                     res = send_requests(url, headers, payload, mode)
                     log.write_line(f"Status: {res.status_code}")
+                    log.write_line(time_stamp_log("Task Successfully"))
+                except requests.exceptions.SSLError as e:
+                    # 证书错误（切换协议）
+                    log.write_line("SSL Error, Switching Protocols...")
+                    if (url.startswith("http://")):
+                        url = url.replace("http://", "https://")
+                        log.write_line(f"Protocols: httpS")
+                    else:
+                        url = url.replace("https://", "http://")
+                        log.write_line(f"Protocols: http")
+                    log.write_line(f"URL: {url}")
+                    log.refresh()
+                    # 第二次尝试
+                    try:
+                        res = send_requests(url, headers, payload, mode)
+                        log.write_line(f"Status: {res.status_code}")
+                        log.write_line(time_stamp_log("Task Successfully"))
+                    except Exception as e:
+                        log.write_line(f"Error: {e}")
+                        log.write_line(time_stamp_log("Task Failed"))
+                        self.notify(str(e),title="Connect Error",severity="error",timeout=5)
+                        res = False
                 except Exception as e:
                     log.write_line(f"Error: {e}")
-                    log.write_line(f"Task failed")
+                    log.write_line(time_stamp_log("Task Failed"))
+                    self.notify(str(e),title="Connect Error",severity="error",timeout=5)
                     res = False
-            except Exception as e:
-                log.write_line(f"Error: {e}")
-                log.write_line(f"Task failed")
-                res = False
-            log.refresh()
+                log.refresh()
 
-            if (res == False):
-                self.query_one("#tip-response").styles.background = "#FF0000"
-                self.query_one("#tip-response").styles.color = "#FFFFFF"
-                self.query_one("#ret").text = ""
-            elif (res.status_code//100) != 2:
-                self.query_one("#tip-response").styles.background = "#FF0000"
-                self.query_one("#tip-response").styles.color = "#FFFFFF"
-                self.query_one("#tip-response").update(f" Response (Payload: {'JSON' if mode else 'String'}, Status: {res.status_code}, Res: {res.headers['Content-Type']})")
-                if ("charset=" in res.headers['Content-Type']):
-                    res.encoding = res.headers['Content-Type'].split("charset=")[-1]
+                if (res == False):
+                    self.query_one("#tip-response").styles.background = "#FF0000"
+                    self.query_one("#tip-response").styles.color = "#FFFFFF"
+                    self.query_one("#ret").text = ""
+                elif (res.status_code//100) != 2:
+                    self.query_one("#tip-response").styles.background = "#FF0000"
+                    self.query_one("#tip-response").styles.color = "#FFFFFF"
+                    self.query_one("#tip-response").update(f" Response (Payload: {'JSON' if mode else 'String'}, Status: {res.status_code}, Res: {res.headers['Content-Type']})")
+                    if ("charset=" in res.headers['Content-Type']):
+                        res.encoding = res.headers['Content-Type'].split("charset=")[-1]
+                    else:
+                        res.encoding = "utf-8"
+                    self.query_one("#ret").text = res.text
                 else:
-                    res.encoding = "utf-8"
-                self.query_one("#ret").text = res.text
-            else:
-                self.query_one("#tip-response").styles.background = "#00FF00"
-                self.query_one("#tip-response").styles.color = "#000000"
-                self.query_one("#tip-response").update(f" Response (Payload: {'JSON' if mode else 'String'}, Status: {res.status_code}, Res: {res.headers['Content-Type']})")
-                if ("charset=" in res.headers['Content-Type']):
-                    res.encoding = res.headers['Content-Type'].split("charset=")[-1]
-                else:
-                    res.encoding = "utf-8"
-                self.query_one("#ret").text = res.text
+                    self.query_one("#tip-response").styles.background = "#00FF00"
+                    self.query_one("#tip-response").styles.color = "#000000"
+                    self.query_one("#tip-response").update(f" Response (Payload: {'JSON' if mode else 'String'}, Status: {res.status_code}, Res: {res.headers['Content-Type']})")
+                    if ("charset=" in res.headers['Content-Type']):
+                        res.encoding = res.headers['Content-Type'].split("charset=")[-1]
+                    else:
+                        res.encoding = "utf-8"
+                    self.query_one("#ret").text = res.text
+
+            t = threading.Thread(target=send_core,args=(self,url,headers,payload,mode))
+            t.start()
 
         except Exception as e:
             self.notify(e,title="Error&Stop Task",severity="error",timeout=5)
