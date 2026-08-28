@@ -7,6 +7,7 @@ import time
 import requests
 import json
 import threading
+from tkinter import filedialog, Tk
 
 def process_str(string: str):
     string = string.strip()
@@ -85,7 +86,9 @@ class SendPost(App):
         self.payload_file = None
 
     BINDINGS = [
-        ("ctrl+s","send","Send"),
+        ("ctrl+g","send","(GO)Send"),
+        ("ctrl+s","save","Save as Preset"),
+        ("ctrl+o","open","Open Preset"),
     ]
 
     @on(Checkbox.Changed, "#payload-mode")
@@ -231,6 +234,67 @@ class SendPost(App):
 
     def action_send(self):
         self.send()
+
+    def action_save(self):
+        root = Tk()
+        root.withdraw()
+        pth = filedialog.asksaveasfilename(
+            title="Save as Preset",
+            initialfile="post_preset.json",
+            defaultextension=".json",
+            filetypes=[("JSON files","*.json"),("All files","*.*")]
+        )
+        root.destroy()
+        if (not pth):
+            return
+        
+        try:
+            with open(pth,"w",encoding="utf-8") as f:
+                preset = {
+                    "url":self.query_one("#url").value,
+                    "headers_f":self.query_one("#headers").value,
+                    "payload_f":self.query_one("#payload").value
+                }
+                json.dump(preset,f)
+                self.notify("save preset successfully",severity="information",timeout=3)
+        except Exception as e:
+            self.notify(e,title="Save Failed",severity="error",timeout=5)
+
+    def action_open(self):
+        root = Tk()
+        root.withdraw()
+        pth = filedialog.askopenfilename(
+            title="Open A Preset",
+            defaultextension=".json",
+            filetypes=[("JSON files","*.json"),("All files","*.*")]
+        )
+        root.destroy()
+        if (not pth):
+            return
+        
+        try:
+            preset = None
+            with open(pth,"r",encoding="utf-8") as f:
+                # try-except -> JSON Decoded Error
+                preset = json.load(f)
+
+            if (not "url" in preset):
+                raise ValueError("url phase is not exists")
+            if (not "headers_f" in preset):
+                raise ValueError("headers_f phase is not exists")
+            if (not "payload_f" in preset):
+                raise ValueError("payload_f phase is not exists")
+            
+            self.query_one("#url").value = preset["url"]
+            self.query_one("#headers").value = preset["headers_f"]
+            self.query_one("payload").value = preset["payload_f"]
+
+        except json.JSONDecodeError as e:
+            self.notify(f"JSON File is Broken, {e}",title="Load Failed",severity="error",timeout=5)
+        except ValueError as e:
+            self.notify(f"JSON File is Broken, {e}",title="Load Failed",severity="error",timeout=5)
+        except Exception as e:
+            self.notify(e,title="Load Failed",severity="error",timeout=5)
 
 if __name__ == "__main__":
     SendPost().run()
