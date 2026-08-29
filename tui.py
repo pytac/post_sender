@@ -9,6 +9,8 @@ import json
 import threading
 from tkinter import filedialog, Tk
 
+# import logging
+
 def process_str(string: str):
     string = string.strip()
     if string.startswith('"') or string.startswith("'"):
@@ -28,6 +30,23 @@ def send_requests(url, headers, payload, mode: bool = True):
 
 def time_stamp_log(string):
     return "["+ time.strftime("%H:%M:%S", time.localtime()) +"] " + string
+
+class OpenTK():
+    def __init__(self):
+        self.root = Tk()
+
+    def __enter__(self):
+        self.root.withdraw()
+        # upvote force
+        self.root.attributes('-topmost', True)
+        self.root.lift()
+        self.root.focus_force()
+        self.root.after(100, lambda: self.root.attributes('-topmost', False))
+        return self.root
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.root.destroy()
+        return False
 
 class SendPost(App):
     """最简单的 Textual 应用"""
@@ -86,7 +105,7 @@ class SendPost(App):
         self.payload_file = None
 
     BINDINGS = [
-        ("ctrl+g","send","(GO)Send"),
+        ("ctrl+g","send","Send"),
         ("ctrl+s","save","Save as Preset"),
         ("ctrl+o","open","Open Preset"),
     ]
@@ -236,15 +255,14 @@ class SendPost(App):
         self.send()
 
     def action_save(self):
-        root = Tk()
-        root.withdraw()
-        pth = filedialog.asksaveasfilename(
-            title="Save as Preset",
-            initialfile="post_preset.json",
-            defaultextension=".json",
-            filetypes=[("JSON files","*.json"),("All files","*.*")]
-        )
-        root.destroy()
+        with OpenTK() as root:
+            pth = filedialog.asksaveasfilename(
+                title="Save as Preset",
+                initialfile="post_preset.json",
+                defaultextension=".json",
+                filetypes=[("JSON files","*.json"),("All files","*.*")],
+                parent=root
+            )
         if (not pth):
             return
         
@@ -261,14 +279,14 @@ class SendPost(App):
             self.notify(e,title="Save Failed",severity="error",timeout=5)
 
     def action_open(self):
-        root = Tk()
-        root.withdraw()
-        pth = filedialog.askopenfilename(
-            title="Open A Preset",
-            defaultextension=".json",
-            filetypes=[("JSON files","*.json"),("All files","*.*")]
-        )
-        root.destroy()
+        pth = None
+        with OpenTK() as root:
+            pth = filedialog.askopenfilename(
+                title="Open A Preset",
+                defaultextension=".json",
+                filetypes=[("JSON files","*.json"),("All files","*.*")],
+                parent=root
+            )
         if (not pth):
             return
         
@@ -287,7 +305,7 @@ class SendPost(App):
             
             self.query_one("#url").value = preset["url"]
             self.query_one("#headers").value = preset["headers_f"]
-            self.query_one("payload").value = preset["payload_f"]
+            self.query_one("#payload").value = preset["payload_f"]
 
         except json.JSONDecodeError as e:
             self.notify(f"JSON File is Broken, {e}",title="Load Failed",severity="error",timeout=5)
