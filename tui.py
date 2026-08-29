@@ -31,21 +31,42 @@ def send_requests(url, headers, payload, mode: bool = True):
 def time_stamp_log(string):
     return "["+ time.strftime("%H:%M:%S", time.localtime()) +"] " + string
 
-class OpenTK():
+class OpenTK:
+    _root = None
+
     def __init__(self):
-        self.root = Tk()
+        if OpenTK._root is None:
+            root = Tk()
+            root.withdraw()
+            # 1x1 像素丢到屏幕左上角外侧，这是最安全的隐身方式
+            root.geometry("1x1-100-100")
+            root.overrideredirect(True)  # 去掉边框
+            OpenTK._root = root
+        self.root = OpenTK._root
 
     def __enter__(self):
-        self.root.withdraw()
-        # upvote force
-        self.root.attributes('-topmost', True)
-        self.root.lift()
-        self.root.focus_force()
-        self.root.after(100, lambda: self.root.attributes('-topmost', False))
-        return self.root
+        root = self.root
+        # 1. 恢复显示（1x1 在屏幕外，肉眼不可见）
+        root.deiconify()
+        
+        # 2. 强制置顶并保持（全程保持，直到退出）
+        root.attributes('-topmost', True)
+        root.lift()
+        root.focus_force()
+        
+        # 3. 强制刷新，确保状态同步（无异步任务）
+        root.update_idletasks()
+        root.update()
+        return root
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        self.root.destroy()
+        root = self.root
+        # 1. 取消置顶
+        root.attributes('-topmost', False)
+        # 2. 隐藏回后台
+        root.withdraw()
+        # 3. 清理事件（防止残留）
+        root.update()
         return False
 
 class SendPost(App):
