@@ -2,7 +2,7 @@ from textual.app import App, ComposeResult
 from textual.containers import *
 from textual.widgets import *
 from textual import on
-from os.path import exists
+# from os.path import exists
 import time
 import requests
 import json
@@ -30,44 +30,6 @@ def send_requests(url, headers, payload, mode: bool = True):
 
 def time_stamp_log(string):
     return "["+ time.strftime("%H:%M:%S", time.localtime()) +"] " + string
-
-class OpenTK:
-    _root = None
-
-    def __init__(self):
-        if OpenTK._root is None:
-            root = Tk()
-            root.withdraw()
-            # 1x1 像素丢到屏幕左上角外侧，这是最安全的隐身方式
-            root.geometry("1x1-100-100")
-            root.overrideredirect(True)  # 去掉边框
-            OpenTK._root = root
-        self.root = OpenTK._root
-
-    def __enter__(self):
-        root = self.root
-        # 1. 恢复显示（1x1 在屏幕外，肉眼不可见）
-        root.deiconify()
-        
-        # 2. 强制置顶并保持（全程保持，直到退出）
-        root.attributes('-topmost', True)
-        root.lift()
-        root.focus_force()
-        
-        # 3. 强制刷新，确保状态同步（无异步任务）
-        root.update_idletasks()
-        root.update()
-        return root
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        root = self.root
-        # 1. 取消置顶
-        root.attributes('-topmost', False)
-        # 2. 隐藏回后台
-        root.withdraw()
-        # 3. 清理事件（防止残留）
-        root.update()
-        return False
 
 class SendPost(App):
     """最简单的 Textual 应用"""
@@ -124,6 +86,12 @@ class SendPost(App):
     def on_mount(self):
         self.headers_file = None
         self.payload_file = None
+
+        self.tk_root = Tk()
+        self.tk_root.geometry("1x1-100-100")
+        self.tk_root.overrideredirect(True)
+        self.tk_root.attributes('-alpha', 0.0)
+        self.tk_root.deiconify()
 
     BINDINGS = [
         ("ctrl+g","send","Send"),
@@ -276,14 +244,16 @@ class SendPost(App):
         self.send()
 
     def action_save(self):
-        with OpenTK() as root:
-            pth = filedialog.asksaveasfilename(
-                title="Save as Preset",
-                initialfile="post_preset.json",
-                defaultextension=".json",
-                filetypes=[("JSON files","*.json"),("All files","*.*")],
-                parent=root
-            )
+        # with OpenTK() as root:
+        self.notify("action_save")
+        time.sleep(0.5)
+        pth = filedialog.asksaveasfilename(
+            title="Save as Preset",
+            initialfile="post_preset.json",
+            defaultextension=".json",
+            filetypes=[("JSON files","*.json"),("All files","*.*")],
+            parent=self.tk_root
+        )
         if (not pth):
             return
         
@@ -300,17 +270,18 @@ class SendPost(App):
             self.notify(e,title="Save Failed",severity="error",timeout=5)
 
     def action_open(self):
-        pth = None
-        with OpenTK() as root:
-            pth = filedialog.askopenfilename(
-                title="Open A Preset",
-                defaultextension=".json",
-                filetypes=[("JSON files","*.json"),("All files","*.*")],
-                parent=root
-            )
+        # with OpenTK() as root:
+        self.notify("action_open")
+        time.sleep(0.5)
+        pth = filedialog.askopenfilename(
+            title="Open A Preset",
+            defaultextension=".json",
+            filetypes=[("JSON files","*.json"),("All files","*.*")],
+            parent=self.tk_root
+        )
         if (not pth):
             return
-        
+
         try:
             preset = None
             with open(pth,"r",encoding="utf-8") as f:
@@ -336,4 +307,10 @@ class SendPost(App):
             self.notify(e,title="Load Failed",severity="error",timeout=5)
 
 if __name__ == "__main__":
+    # logging.basicConfig(
+    #     level=logging.DEBUG, 
+    #     filename="tect\\log.log",
+    #     filemode="w",
+    # )
+    # logging.info("start")
     SendPost().run()
